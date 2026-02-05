@@ -92,16 +92,53 @@ $(go env GOPATH)/bin/golangci-lint migrate --skip-validation
 >    - 如果都无输出 → 启用 formatters（取消注释）
 >    - 如果有输出 → 保持注释，在对应项上方添加 `# TODO 格式化代码并开启 - 当前有 X 个文件不符合`
 > 4. **工作流程**：创建最小配置 → 运行 lint → **分类处理** → 添加规范的 TODO 注释
-> 5. **分类标准与处理方式**：
+> 5. **通用分类判断逻辑**（基于 linter 描述的关键词）：
 >
->    | 分类 | 说明 | 处理方式 | 示例 |
->    |------|------|----------|------|
->    | **a. 可配置调优** | 复杂度/长度等有阈值 | 优先调整 `settings` 阈值，仍有问题再 disable | funlen, gocyclo, gocognit, nestif |
->    | **b. 代码风格-人工确认** | 格式/命名等风格问题 | `disable` + `# TODO 代码风格-确认是否禁用` | mnd, wsl, lll, godot, tagalign |
->    | **c. 严重bug-建议修复** | 安全/错误处理问题 | `disable` + `# TODO 严重bug-建议修复` | errcheck, gosec, staticcheck |
->    | **d. 无法修改** | 外部约束/遗留系统 | `linters.exclusions` 路径排除，不需要 TODO | 第三方接口、生成代码 |
->    | **e. 可小修** | 少量特定问题 | `issues.exclude-rules` 按 text 排除 | 特定文件的个别问题 |
->    | **f. 新特性-后续考虑** | 新特性/优化建议 | `disable` + `# TODO 新特性-后续考虑` | modernize, revive, gocritic |
+>    **第一步：获取 linter 描述**
+>    ```bash
+>    $(go env GOPATH)/bin/golangci-lint help <linter-name>
+>    ```
+>
+>    **第二步：根据描述中的关键词分类**
+>
+>    | 分类 | 描述中的关键词 | 处理方式 | 示例 linter 及其描述 |
+>    |------|---------------|----------|---------------------|
+>    | **a. 可配置调优** | complexity, long, deeply, count, length, size, max, min, limit | 调整 settings | funlen: "Checks for **long** functions"<br>gocyclo: "Checks cyclomatic **complexity**"<br>nestif: "Reports **deeply** nested if"<br>dogsled: "Checks **too many** blank identifiers" |
+>    | **b. 代码风格-人工确认** | style, format, naming, whitespace, align, order, declaration | disable + TODO | godot: "Check if comments end in period"<br>tagalign: "Check struct tags well **aligned**"<br>misspell: "Finds commonly **misspelled**"<br>varnamelen: "Checks variable name **length**" |
+>    | **c. 严重bug-建议修复** | bug, security, error, check, nil, unsafe, detect, inspects | disable + TODO | errcheck: "Checking for **unchecked errors**"<br>gosec: "**Inspects** source code for **security**"<br>staticcheck: "set of rules from staticcheck"<br>nilerr: "returns **nil** even if error is not **nil**" |
+>    | **d. 无法修改** | (需看具体错误消息，通常涉及外部约束) | exclusions | canonicalheader: HTTP header 规范（第三方接口）<br>asciicheck: 非 ASCII 符号（中文函数名） |
+>    | **e. 可小修** | (由实际问题数量决定，< 5 个) | exclude-rules | 任何 linter，如果只有少量问题 |
+>    | **f. 新特性-后续考虑** | modern, new, latest, replace, simplification, feature | disable + TODO | modernize: "suggest **simplifications** using **modern** language"<br>exptostd: "replaced by **std** functions"<br>usestdlibvars: "use variables from **standard library**" |
+>
+>    **第三步：完整决策树**
+>    ```
+>    1. 问题数量 < 5？
+>       ├── 是 → 分类 e (可小修): exclude-rules
+>       └── 否 → 继续
+>    2. 描述中有 complexity/long/deeply/max/min/limit/length？
+>       ├── 是 → 分类 a (可配置调优): 优先调整 settings
+>       └── 否 → 继续
+>    3. 具体错误是外部约束导致（第三方接口/生成代码/中文命名）？
+>       ├── 是 → 分类 d (无法修改): exclusions 路径排除
+>       └── 否 → 继续
+>    4. 描述中有 modern/new/latest/replace/std/simplification？
+>       ├── 是 → 分类 f (新特性-后续考虑): disable + TODO
+>       └── 否 → 继续
+>    5. 描述中有 bug/security/error/check/nil/unsafe/detect/inspects？
+>       ├── 是 → 分类 c (严重bug-建议修复): disable + TODO
+>       └── 否 → 分类 b (代码风格-人工确认): disable + TODO
+>    ```
+>
+>    **示例演示**：
+>
+>    | Linter | 描述 | 关键词 | 分类 |
+>    |--------|------|--------|------|
+>    | cyclop | "Checks function **complexity**" | complexity | a |
+>    | gocritic | "checks for **bugs**, performance and **style**" | bugs (优先) | c |
+>    | revive | "replacement of golint" | (无明确关键词) | b |
+>    | bodyclose | "Checks whether response body is **closed successfully**" | error/check | c |
+>    | goconst | "Finds repeated strings that could be replaced by a **constant**" | (style) | b |
+>    | fatcontext | "Detects **nested contexts**" | nested → complexity | a |
 >
 > 6. **配置优先级**：
 >    - **第一优先**：调整 `settings` 阈值（如 funlen.lines, gocyclo.min-complexity）
