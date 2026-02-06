@@ -1,414 +1,414 @@
 ---
 name: upgrade-golangci-lint
-description: 升级 golangci-lint 到最新版本，自动迁移配置（v1→v2），运行 lint 并补充配置让代码通过。核心原则：只调整配置，不修改代码。
+description: Upgrade golangci-lint to the latest version, automatically migrate config (v1→v2), run lint and supplement config to make code pass. Core principle: only adjust config, do not modify code.
 ---
 
-# golangci-lint 版本升级
+# golangci-lint Version Upgrade
 
-升级 golangci-lint 到最新版本，处理配置迁移，并调整配置让存量代码通过 lint 检查。
+Upgrade golangci-lint to the latest version, handle configuration migration, and adjust configuration to make existing code pass lint checks.
 
-> **核心原则**：通过调整配置让存量代码通过 lint，**不修改现有代码**。只影响新代码。
+> **Core Principle**: Make existing code pass lint by adjusting configuration, **do not modify existing code**. Only affects new code.
 
-## 何时使用
+## When to Use
 
-- golangci-lint 版本过旧，需要升级到最新版本
-- CI 中 lint 失败，发现是版本问题
-- 想要使用新版本的 linter 功能
+- golangci-lint version is outdated and needs to be upgraded to the latest version
+- lint fails in CI due to version issues
+- Want to use new linter features from the latest version
 
-## 执行流程
+## Execution Flow
 
-### 1. 检测当前状态
+### 1. Detect Current State
 
 ```bash
-# 检查当前版本
+# Check current version
 golangci-lint --version
 
-# 检查配置文件（支持 4 种格式）
-ls .golangci.* 2>/dev/null || echo "无配置"
+# Check for configuration file (supports 4 formats)
+ls .golangci.* 2>/dev/null || echo "No config"
 
-# 检查配置格式版本（v1 还是 v2）- 仅 YAML 格式有效
-grep "^version:" .golangci.yml .golangci.yaml 2>/dev/null && echo "v2 配置" || echo "v1 配置（需迁移）"
+# Check config format version (v1 or v2) - only valid for YAML format
+grep "^version:" .golangci.yml .golangci.yaml 2>/dev/null && echo "v2 config" || echo "v1 config (needs migration)"
 
-# 检测安装方式
+# Detect installation method
 if command -v brew &> /dev/null && brew list golangci-lint &> /dev/null 2>/dev/null; then
     INSTALL_METHOD="brew"
 elif command -v golangci-lint &> /dev/null; then
     INSTALL_METHOD="binary"
 else
-    echo "golangci-lint 未安装，请先运行 setup-golangci-lint"
+    echo "golangci-lint not installed, please run setup-golangci-lint first"
     exit 1
 fi
 ```
 
-### 2. 升级二进制
+### 2. Upgrade Binary
 
-根据检测到的安装方式执行升级：
+Execute upgrade based on detected installation method:
 
-| 安装方式 | 升级命令 |
-|---------|---------|
-| **二进制** | `curl -sSfL https://golangci-lint.run/install.sh | sh -s -- -b $(go env GOPATH)/bin latest` |
+| Installation Method | Upgrade Command |
+|---------------------|-----------------|
+| **Binary** | `curl -sSfL https://golangci-lint.run/install.sh | sh -s -- -b $(go env GOPATH)/bin latest` |
 | **Homebrew** | `brew upgrade golangci-lint` |
-| **Alpine (无 curl)** | `wget -O- -nv https://golangci-lint.run/install.sh | sh -s -- -b $(go env GOPATH)/bin latest` |
+| **Alpine (no curl)** | `wget -O- -nv https://golangci-lint.run/install.sh | sh -s -- -b $(go env GOPATH)/bin latest` |
 
 ```bash
-# 二进制方式升级（推荐）
+# Binary upgrade (recommended)
 curl -sSfL https://golangci-lint.run/install.sh | sh -s -- -b $(go env GOPATH)/bin latest
 
-# 验证升级成功
+# Verify upgrade success
 golangci-lint --version
 ```
 
-### 3. 配置迁移（v1 → v2）
+### 3. Configuration Migration (v1 → v2)
 
-如果检测到是 v1 配置（配置文件中无 `version:` 字段），执行迁移：
+If v1 configuration is detected (no `version:` field in config file), execute migration:
 
 ```bash
-# 自动迁移 v1 配置到 v2 格式
+# Automatically migrate v1 config to v2 format
 golangci-lint migrate --skip-validation
 ```
 
-**说明**：
-- `--skip-validation`: 跳过验证，直接转换（推荐）
-- `migrate` 命令会自动：
-  - 添加 `version: 2`
-  - 将 `enable-all/disable-all` 转换为 `linters.default`
-  - 将 `linters-settings` 改为 `linters.settings`
-  - 将 `issues.exclude-rules` 改为 `linters.exclusions.rules`
-  - **保留所有现有的 disable 和 exclude 配置**
+**Notes**:
+- `--skip-validation`: Skip validation, convert directly (recommended)
+- `migrate` command will automatically:
+  - Add `version: 2`
+  - Convert `enable-all/disable-all` to `linters.default`
+  - Change `linters-settings` to `linters.settings`
+  - Change `issues.exclude-rules` to `linters.exclusions.rules`
+  - **Preserve all existing disable and exclude configurations**
 
-迁移后手动检查配置，确保：
-- `linters.default` 值符合预期（standard/all/none/fast）
-- 禁用的 linters 仍有 `# TODO fix later by human` 注释
-- 复杂度阈值已调高并标注 `# TODO reduce this`
+After migration, manually check the configuration to ensure:
+- `linters.default` value meets expectations (standard/all/none/fast)
+- Disabled linters still have `# TODO fix later by human` comments
+- Complexity thresholds are raised and marked with `# TODO reduce this`
 
 ```bash
-# 验证配置格式
+# Verify configuration format
 golangci-lint config verify
 ```
 
-### 4. 运行 lint 检查
+### 4. Run Lint Check
 
 ```bash
-# 运行 lint
+# Run lint
 golangci-lint run --timeout=5m ./...
 ```
 
-### 4.5. 识别和处理新增 linter
+### 4.5. Identify and Handle New Linters
 
-> **🆕 新增 linter 特殊处理**：
-> 升级版本后，新版本可能引入之前不存在的 linter。对于这些新增的 linter，处理策略与存量 linter 有所不同。
+> **🆕 Special Handling for New Linters**:
+> After version upgrade, the new version may introduce linters that didn't exist before. Handling strategy for these new linters differs from existing linters.
 
-**识别新增 linter**：
+**Identify New Linters**:
 
 ```bash
-# 保存旧版本的 linter 列表（升级前执行）
+# Save old version linter list (execute before upgrade)
 golangci-lint help linters > /tmp/old_linters.txt
 
-# 升级后对比
+# Compare after upgrade
 golangci-lint help linters > /tmp/new_linters.txt
 diff /tmp/old_linters.txt /tmp/new_linters.txt
 ```
 
-或者在升级后直接查看错误输出，识别之前未见过的 linter 名称。
+Or simply check the error output after upgrade to identify previously unseen linter names.
 
-**新增 linter 的处理策略**：
+**New Linter Handling Strategy**:
 
-| 问题数量 | 分类 | 处理方式 | 说明 |
-|---------|------|----------|------|
-| **< 5 个** | 任何分类 | **提供修复建议** | 少量问题，值得修复 |
-| **5-20 个** | c. 严重bug | **提供修复建议** | 安全/错误问题，建议修复 |
-| **5-20 个** | a. 可配置调优 | 调整 settings | 优先调整阈值 |
-| **5-20 个** | b/d/f 其他 | disable + TODO | 按原有逻辑处理 |
-| **> 20 个** | 任何分类 | disable + TODO | 太多问题，暂不处理 |
+| Issue Count | Category | Action | Notes |
+|-------------|----------|--------|-------|
+| **< 5** | Any category | **Provide fix suggestions** | Few issues, worth fixing |
+| **5-20** | c. Critical bugs | **Provide fix suggestions** | Security/error issues, recommended to fix |
+| **5-20** | a. Configurable | Adjust settings | Prioritize threshold adjustment |
+| **5-20** | b/d/f Others | disable + TODO | Handle per original logic |
+| **> 20** | Any category | disable + TODO | Too many issues, handle later |
 
-**提供修复建议的格式**：
+**Fix Suggestion Format**:
 
 ```markdown
-## 🆕 新增 Linter 修复建议
+## 🆕 New Linter Fix Suggestions
 
-以下 linter 是本次升级新增的，且问题数量较少，建议修复：
+The following linters are newly introduced in this upgrade and have few issues, recommended to fix:
 
 ### Linter: nilerr
-- **问题数量**: 3 个
-- **严重性**: 高（可能导致 bug）
-- **修复建议**:
-  1. `pkg/api/handler.go:45` - 检查错误返回是否正确
-  2. `pkg/service/user.go:123` - 确保错误不为 nil 时返回非 nil
-  3. `pkg/db/client.go:67` - 修复错误处理逻辑
+- **Issue Count**: 3
+- **Severity**: High (may cause bugs)
+- **Fix Suggestions**:
+  1. `pkg/api/handler.go:45` - Check error return is correct
+  2. `pkg/service/user.go:123` - Ensure non-nil return when error is non-nil
+  3. `pkg/db/client.go:67` - Fix error handling logic
 
 ### Linter: contextcheck
-- **问题数量**: 2 个
-- **严重性**: 中（可能导致上下文丢失）
-- **修复建议**:
-  1. `pkg/api/client.go:89` - 添加 context 参数
-  2. `pkg/service/order.go:156` - 传递 context 到下游
+- **Issue Count**: 2
+- **Severity**: Medium (may cause context loss)
+- **Fix Suggestions**:
+  1. `pkg/api/client.go:89` - Add context parameter
+  2. `pkg/service/order.go:156` - Pass context to downstream
 
 ---
 
-**是否需要我帮你修复这些问题？** 回复 "fix" 开始修复。
+**Would you like me to help fix these issues?** Reply "fix" to start fixing.
 ```
 
-**为什么不自动修复新增 linter 的问题**：
-1. **需要人工判断**：修复可能影响业务逻辑
-2. **渐进式改进**：让用户选择修复优先级
-3. **透明决策**：用户了解每个修复的影响
+**Why Not Auto-Fix New Linter Issues**:
+1. **Requires Human Judgment**: Fixes may affect business logic
+2. **Incremental Improvement**: Let users choose fix priority
+3. **Transparent Decisions**: Users understand impact of each fix
 
-> **✅ AI 必须在最终输出报告中包含"新增 Linter 分析"部分**：
-> - 列出所有新增的 linter
-> - 按问题数量和严重性分类（建议修复 vs 暂不修复）
-> - 提供清晰的表格汇总
-> - 参考下面的"输出报告模板"中的格式
+> **✅ AI MUST include "New Linter Analysis" section in final output report**:
+> - List all newly added linters
+> - Categorize by issue count and severity (recommended to fix vs defer)
+> - Provide clear summary table
+> - Refer to format in "Output Report Template" below
 
-### 5. 补充配置（根据新问题调整）
+### 5. Supplement Configuration (Adjust Based on New Issues)
 
-> **📌 AI 操作要求**：
-> 1. **核心原则**：**不修改存量代码**，只通过配置调整（settings/disable/exclusions）让代码通过
-> 2. **工作流程**：运行 lint → **分类处理** → 添加规范的 TODO 注释
-> 3. **通用分类判断逻辑**（基于 linter 描述的关键词）：
+> **📌 AI Operation Requirements**:
+> 1. **Core Principle**: **Do not modify existing code**, only make code pass by adjusting configuration (settings/disable/exclusions)
+> 2. **Workflow**: Run lint → **Categorize and handle** → Add standardized TODO comments
+> 3. **Universal Classification Logic** (based on keywords in linter description):
 >
->    **第一步：获取 linter 描述**
+>    **Step 1: Get linter description**
 >    ```bash
 >    golangci-lint help <linter-name>
 >    ```
 >
->    **第二步：根据描述中的关键词分类**
+>    **Step 2: Categorize based on keywords in description**
 >
->    | 分类 | 描述中的关键词 | 处理方式 | 示例 linter 及其描述 |
->    |------|---------------|----------|---------------------|
->    | **a. 可配置调优** | complexity, long, deeply, count, length, size, max, min, limit | 调整 settings | funlen: "Checks for **long** functions"<br>gocyclo: "Checks cyclomatic **complexity**"<br>nestif: "Reports **deeply** nested if"<br>dogsled: "Checks **too many** blank identifiers" |
->    | **b. 代码风格-人工确认** | style, format, naming, whitespace, align, order, declaration | disable + TODO | godot: "Check if comments end in period"<br>tagalign: "Check struct tags well **aligned**"<br>misspell: "Finds commonly **misspelled**"<br>varnamelen: "Checks variable name **length**" |
->    | **c. 严重bug-建议修复** | bug, security, error, check, nil, unsafe, detect, inspects | disable + TODO | errcheck: "Checking for **unchecked errors**"<br>gosec: "**Inspects** source code for **security**"<br>staticcheck: "set of rules from staticcheck"<br>nilerr: "returns **nil** even if error is not **nil**" |
->    | **d. 无法修改** | (需看具体错误消息，通常涉及外部约束) | exclusions | canonicalheader: HTTP header 规范（第三方接口）<br>asciicheck: 非 ASCII 符号（中文函数名） |
->    | **e. 可小修** | (由实际问题数量决定，< 5 个) | exclude-rules | 任何 linter，如果只有少量问题 |
->    | **f. 新特性-后续考虑** | modern, new, latest, replace, simplification, feature | disable + TODO | modernize: "suggest **simplifications** using **modern** language"<br>exptostd: "replaced by **std** functions"<br>usestdlibvars: "use variables from **standard library**" |
+>    | Category | Keywords in Description | Action | Example Linters & Descriptions |
+>    |----------|------------------------|--------|-------------------------------|
+>    | **a. Configurable** | complexity, long, deeply, count, length, size, max, min, limit | Adjust settings | funlen: "Checks for **long** functions"<br>gocyclo: "Checks cyclomatic **complexity**"<br>nestif: "Reports **deeply** nested if"<br>dogsled: "Checks **too many** blank identifiers" |
+>    | **b. Code Style-Manual Confirm** | style, format, naming, whitespace, align, order, declaration | disable + TODO | godot: "Check if comments end in period"<br>tagalign: "Check struct tags well **aligned**"<br>misspell: "Finds commonly **misspelled**"<br>varnamelen: "Checks variable name **length**" |
+>    | **c. Critical Bugs-Suggest Fix** | bug, security, error, check, nil, unsafe, detect, inspects | disable + TODO | errcheck: "Checking for **unchecked errors**"<br>gosec: "**Inspects** source code for **security**"<br>staticcheck: "set of rules from staticcheck"<br>nilerr: "returns **nil** even if error is not **nil**" |
+>    | **d. Cannot Modify** | (check specific error message, usually involves external constraints) | exclusions | canonicalheader: HTTP header spec (3rd-party APIs)<br>asciicheck: Non-ASCII symbols (Chinese function names) |
+>    | **e. Can Fix Small** | (determined by actual issue count, < 5) | exclude-rules | Any linter with few issues |
+>    | **f. New Features-Defer** | modern, new, latest, replace, simplification, feature | disable + TODO | modernize: "suggest **simplifications** using **modern** language"<br>exptostd: "replaced by **std** functions"<br>usestdlibvars: "use variables from **standard library**" |
 >
->    **第三步：完整决策树**
+>    **Step 3: Complete Decision Tree**
 >    ```
->    1. 问题数量 < 5？
->       ├── 是 → 分类 e (可小修): exclude-rules
->       └── 否 → 继续
->    2. 描述中有 complexity/long/deeply/max/min/limit/length？
->       ├── 是 → 分类 a (可配置调优): 优先调整 settings
->       └── 否 → 继续
->    3. 具体错误是外部约束导致（第三方接口/生成代码/中文命名）？
->       ├── 是 → 分类 d (无法修改): exclusions 路径排除
->       └── 否 → 继续
->    4. 描述中有 modern/new/latest/replace/std/simplification？
->       ├── 是 → 分类 f (新特性-后续考虑): disable + TODO
->       └── 否 → 继续
->    5. 描述中有 bug/security/error/check/nil/unsafe/detect/inspects？
->       ├── 是 → 分类 c (严重bug-建议修复): disable + TODO
->       └── 否 → 分类 b (代码风格-人工确认): disable + TODO
+>    1. Issue count < 5?
+>       ├── Yes → Category e (can fix small): exclude-rules
+>       └── No → Continue
+>    2. Description has complexity/long/deeply/max/min/limit/length?
+>       ├── Yes → Category a (configurable): Prioritize adjusting settings
+>       └── No → Continue
+>    3. Specific error caused by external constraints (3rd-party APIs/generated code/Chinese naming)?
+>       ├── Yes → Category d (cannot modify): exclusions path exclusion
+>       └── No → Continue
+>    4. Description has modern/new/latest/replace/std/simplification?
+>       ├── Yes → Category f (new features-defer): disable + TODO
+>       └── No → Continue
+>    5. Description has bug/security/error/check/nil/unsafe/detect/inspects?
+>       ├── Yes → Category c (critical bugs-suggest fix): disable + TODO
+>       └── No → Category b (code style-manual confirm): disable + TODO
 >    ```
 >
-> 4. **配置优先级**：
->    - **第一优先**：调整 `settings` 阈值（如 funlen.lines, gocyclo.min-complexity）
->    - **第二优先**：使用 `linters.exclusions` 路径排除（无法修改的代码）
->    - **第三优先**：使用 `issues.exclude-rules` 按特定规则排除（少量问题）
->    - **最后选择**：完全 `disable`（大量问题且无法通过配置解决）
-> 5. **避免重复**：每个 linter 只出现一次，检查是否有重复项
+> 4. **Configuration Priority**:
+>    - **1st Priority**: Adjust `settings` thresholds (e.g., funlen.lines, gocyclo.min-complexity)
+>    - **2nd Priority**: Use `linters.exclusions` path exclusion (code that cannot be modified)
+>    - **3rd Priority**: Use `issues.exclude-rules` rule-based exclusion (specific few issues)
+>    - **Last Resort**: Completely `disable` (many issues and cannot be resolved via config)
+> 5. **Avoid Duplicates**: Each linter appears only once, check for duplicates
 
-**根据实际错误调整配置**：
+**Adjust Configuration Based on Actual Errors**:
 
-**配置优先级**（按顺序尝试）：
+**Configuration Priority** (try in order):
 
-| 优先级 | 处理方式 | 适用场景 |
-|--------|----------|----------|
-| **1️⃣ 最高** | 调整 `settings` 阈值 | 复杂度、长度类有配置项的 linter |
-| **2️⃣ 其次** | `linters.exclusions` 路径排除 | 无法修改的代码（生成/第三方） |
-| **3️⃣ 然后** | `issues.exclude-rules` 按规则排除 | 少量特定问题 |
-| **4️⃣ 最后** | `disable` 完全禁用 | 大量问题且无配置选项 |
+| Priority | Action | Use Case |
+|----------|--------|----------|
+| **1️⃣ Highest** | Adjust `settings` thresholds | Linters with config options for complexity/length |
+| **2️⃣ Second** | `linters.exclusions` path exclusion | Code that cannot be modified (generated/3rd-party) |
+| **3️⃣ Then** | `issues.exclude-rules` rule exclusion | Specific few issues |
+| **4️⃣ Last** | `disable` completely | Many issues and no config options |
 
-**分类 a: 可配置调优（优先调整 settings）**
+**Category a: Configurable (Prioritize adjusting settings)**
 
 ```yaml
 linters:
   settings:
-    # 复杂度类 linter：优先调整阈值，而非完全禁用
+    # Complexity linters: Prioritize adjusting thresholds rather than completely disabling
     funlen:
-      lines: 100        # 默认 60，调高以适应存量代码
-      statements: 60    # 默认 40
+      lines: 100        # Default 60, raised to accommodate existing code
+      statements: 60    # Default 40
     gocyclo:
-      min-complexity: 25  # 默认 15
+      min-complexity: 25  # Default 15
     gocognit:
-      min-complexity: 30  # 默认 15
+      min-complexity: 30  # Default 15
     nestif:
-      min-complexity: 8   # 默认 5
+      min-complexity: 8   # Default 5
 ```
 
-**分类 b: 代码风格-人工确认**
+**Category b: Code Style-Manual Confirm**
 
 ```yaml
 linters:
   disable:
-    # TODO 代码风格-确认是否禁用: 不影响功能，需人工确认处理方式
-    - mnd              # magic numbers，风格问题
-    - wsl              # whitespace，代码风格
-    - lll              # 行长度限制，风格问题
-    - godot            # 注释句点
-    - tagalign         # struct tag 对齐
-    - goconst          # 常量提取建议
+    # TODO code style-confirm whether to disable: Does not affect functionality, requires manual confirmation
+    - mnd              # magic numbers, style issues
+    - wsl              # whitespace, code style
+    - lll              # line length limit, style issues
+    - godot            # comment period
+    - tagalign         # struct tag alignment
+    - goconst          # constant extraction suggestion
 ```
 
-**分类 c: 严重bug-建议修复**
+**Category c: Critical Bugs-Suggest Fix**
 
 ```yaml
 linters:
   disable:
-    # TODO 严重bug-建议修复: 安全和错误处理问题，建议逐步修复
-    - errcheck         # 未检查错误
-    - gosec            # 安全检查
-    - staticcheck      # 静态分析
-    - wrapcheck       # 错误包装
-    - nilerr           # nil 错误检查
+    # TODO critical bugs-suggest fix: Security and error handling issues, recommend gradual fixes
+    - errcheck         # unchecked errors
+    - gosec            # security checks
+    - staticcheck      # static analysis
+    - wrapcheck       # error wrapping
+    - nilerr           # nil error checks
 ```
 
-**分类 d: 无法修改（路径排除）**
+**Category d: Cannot Modify (Path Exclusion)**
 
 ```yaml
 linters:
   exclusions:
     rules:
-      # 生成代码（无法修改）
+      # Generated code (cannot modify)
       - path: \.pb\.go|\.gen\.go|\.gen-\w+\.go|\.mock\.go
         linters: [all]
 
-      # 第三方依赖（无法修改）
+      # Third-party dependencies (cannot modify)
       - path: vendor/|third_party/
         linters: [all]
 
 issues:
   exclude-rules:
-    # 第三方接口（不可修改）
+    # Third-party APIs (cannot modify)
     - text: "non-canonical header"
       linters: [canonicalheader]
 
-    # 中文函数名（业务需求，不可修改）
+    # Chinese function names (business requirement, cannot modify)
     - text: "ID.*must match"
       linters: [asciicheck]
 ```
 
-**分类 e: 可小修（少量特定问题）**
+**Category e: Can Fix Small (Few Specific Issues)**
 
 ```yaml
 issues:
   exclude-rules:
-    # 特定业务场景（无法修改）
+    # Specific business scenarios (cannot modify)
     - text: "G101: potential hardcoded credential"
       path: config/.*\.go
       linters: [gosec]
 
-    # 测试文件放宽
+    # Relax for test files
     - path: _test\.go
       linters: [errcheck, gosec, contextcheck]
 ```
 
-**分类 f: 新特性-后续考虑**
+**Category f: New Features-Defer**
 
 ```yaml
 linters:
   disable:
-    # TODO 新特性-后续考虑: 不影响当前代码，后续可选择性启用
-    - modernize        # 现代 Go 语法建议
-    - revive           # revive 规则集
-    - gocritic         # 代码风格建议
-    - exhaustruct      # 结构体字段完整性
+    # TODO new features-defer: Does not affect current code, can be selectively enabled later
+    - modernize        # modern Go syntax suggestions
+    - revive           # revive ruleset
+    - gocritic         # code style suggestions
+    - exhaustruct      # struct field completeness
 ```
 
-### 6. 最终验证
+### 6. Final Verification
 
 ```bash
-# 再次运行确保通过
+# Run again to ensure pass
 golangci-lint run --timeout=5m ./...
 ```
 
-## 输出报告模板
+## Output Report Template
 
 ```markdown
-# golangci-lint 升级完成
+# golangci-lint Upgrade Complete
 
-## 版本信息
-- 旧版本: v1.59.1
-- 新版本: v2.8.0
-- 配置迁移: v1 → v2
+## Version Information
+- Old Version: v1.59.1
+- New Version: v2.8.0
+- Config Migration: v1 → v2
 
-## 🆕 新增 Linter 分析
+## 🆕 New Linter Analysis
 
-本次升级引入了 **5 个新 linter**，以下是处理建议：
+This upgrade introduced **5 new linters**, here are handling recommendations:
 
-### 建议修复的新增 linter（问题数量 < 5 或属于严重问题）
+### Recommended New Linters to Fix (issue count < 5 or critical issues)
 
-| Linter | 问题数 | 分类 | 严重性 | 建议操作 |
-|--------|--------|------|--------|----------|
-| **nilerr** | 3 | c. 严重bug-建议修复 | 🔴 高 | **建议修复** - 可能导致 bug |
-| **contextcheck** | 2 | c. 严重bug-建议修复 | 🟡 中 | **建议修复** - 可能导致上下文丢失 |
-| **sqlclosecheck** | 1 | c. 严重bug-建议修复 | 🟡 中 | **建议修复** - 资源泄漏风险 |
+| Linter | Issues | Category | Severity | Recommended Action |
+|--------|--------|----------|----------|-------------------|
+| **nilerr** | 3 | c. Critical Bugs-Suggest Fix | 🔴 High | **Recommended Fix** - May cause bugs |
+| **contextcheck** | 2 | c. Critical Bugs-Suggest Fix | 🟡 Medium | **Recommended Fix** - May cause context loss |
+| **sqlclosecheck** | 1 | c. Critical Bugs-Suggest Fix | 🟡 Medium | **Recommended Fix** - Resource leak risk |
 
-**修复建议示例**：
+**Fix Suggestion Example**:
 ```go
-// ❌ 当前代码（nilerr 检测到的问题）
+// ❌ Current code (issue detected by nilerr)
 if err != nil {
-    return nil, nil  // bug: 返回了 nil error 但值也是 nil
+    return nil, nil  // bug: returning nil error with nil value
 }
 
-// ✅ 修复后
+// ✅ After fix
 if err != nil {
     return nil, err
 }
 ```
 
-### 暂不修复的新增 linter（问题数量过多或为风格问题）
+### New Linters Not to Fix (too many issues or style issues)
 
-| Linter | 问题数 | 分类 | 处理方式 | 说明 |
-|--------|--------|------|----------|------|
-| exhaustruct | 49 | f. 新特性-后续考虑 | disable + TODO | 结构体字段完整性，非关键问题 |
-| testifylint | 8 | b. 代码风格-人工确认 | disable + TODO | 测试代码风格，可后续优化 |
+| Linter | Issues | Category | Action | Notes |
+|--------|--------|----------|--------|-------|
+| exhaustruct | 49 | f. New Features-Defer | disable + TODO | Struct field completeness, non-critical |
+| testifylint | 8 | b. Code Style-Manual Confirm | disable + TODO | Test code style, can optimize later |
 
 ---
 
-**是否需要我帮你修复上述"建议修复"的问题？** 回复 "fix" 开始自动修复。
+**Would you like me to help fix the above "recommended fix" issues?** Reply "fix" to start auto-fix.
 
-## 配置变更
+## Configuration Changes
 
-### 新增 disable 的 linters
-| Linter | 分类 | 原因 |
-|--------|------|------|
-| errcheck | c. 严重bug-建议修复 | 13 issues: 未检查错误 |
-| gosec | c. 严重bug-建议修复 | 10 issues: 安全检查 |
-| mnd | b. 代码风格-人工确认 | 47 issues: magic numbers |
-| exhaustruct | f. 新特性-后续考虑 | 49 issues: 新增 linter，问题过多 |
-| testifylint | b. 代码风格-人工确认 | 8 issues: 新增 linter，测试风格 |
+### Newly Disabled Linters
+| Linter | Category | Reason |
+|--------|----------|--------|
+| errcheck | c. Critical Bugs-Suggest Fix | 13 issues: unchecked errors |
+| gosec | c. Critical Bugs-Suggest Fix | 10 issues: security checks |
+| mnd | b. Code Style-Manual Confirm | 47 issues: magic numbers |
+| exhaustruct | f. New Features-Defer | 49 issues: new linter, too many issues |
+| testifylint | b. Code Style-Manual Confirm | 8 issues: new linter, test style |
 
-### 新增 settings 调整
-| Linter | 配置项 | 旧值 | 新值 |
-|--------|--------|------|------|
+### Newly Adjusted Settings
+| Linter | Config | Old Value | New Value |
+|--------|--------|-----------|-----------|
 | funlen | lines | 60 | 100 |
 | gocyclo | min-complexity | 15 | 25 |
 
-### 新增 exclusions
-- 生成代码: `.pb.go`, `.gen.go`, `.mock.go`
+### Newly Added Exclusions
+- Generated code: `.pb.go`, `.gen.go`, `.mock.go`
 
-## 下一步
-1. ✅ **新增 linter 的小量问题**：建议优先修复（上述"建议修复"列表）
-2. 新代码必须通过 lint
-3. 优先修复 "c. 严重bug-建议修复" 分类的问题
-4. 改进代码后，可逐步降低复杂度阈值
+## Next Steps
+1. ✅ **Small issues from new linters**: Recommend prioritizing fixes (see "recommended fix" list above)
+2. New code must pass lint
+3. Prioritize fixing issues in "c. Critical Bugs-Suggest Fix" category
+4. After code improvements, gradually reduce complexity thresholds
 ```
 
-## 注意事项
+## Notes
 
-1. **核心原则**：**不修改存量代码**，只调整配置让代码通过 lint
-2. **新增 linter 特殊处理**：
-   - 对于新增 linter 的小量问题（< 5 个）或严重问题（安全/错误处理），**会提供修复建议**
-   - 用户可以选择是否修复，AI 不会自动修改代码
-   - 这与"存量代码不修改"原则不冲突，因为这是"新规则"的问题
-3. **v2 配置格式**：必须添加 `version: 2`，使用 `linters.default` 而非 `enable-all`
-4. **保留现有配置**：迁移时保留所有 disable/exclude 设置
-5. **升级前备份**：建议备份 `.golangci.yml` 配置文件
-6. **逐步收紧**：后续可以逐步降低 settings 阈值，提高代码质量
+1. **Core Principle**: **Do not modify existing code**, only adjust configuration to make code pass lint
+2. **Special Handling for New Linters**:
+   - For new linters with few issues (< 5) or critical issues (security/error handling), **provide fix suggestions**
+   - Users can choose whether to fix, AI will not automatically modify code
+   - This does not conflict with "do not modify existing code" principle, as these are "new rule" issues
+3. **v2 Configuration Format**: Must add `version: 2`, use `linters.default` instead of `enable-all`
+4. **Preserve Existing Configuration**: Keep all disable/exclude settings during migration
+5. **Backup Before Upgrade**: Recommended to backup `.golangci.yml` configuration file
+6. **Gradual Tightening**: Can gradually reduce settings thresholds later to improve code quality
 
-## 相关资源
+## Related Resources
 
-- [官方安装文档](https://golangci-lint.run/docs/welcome/install/local/)
-- [配置迁移指南](https://golangci-lint.run/docs/configuration/migrate/)
-- [v2 变更说明](https://golangci-lint.run/usage/v2/)
+- [Official Installation Docs](https://golangci-lint.run/docs/welcome/install/local/)
+- [Configuration Migration Guide](https://golangci-lint.run/docs/configuration/migrate/)
+- [v2 Changes](https://golangci-lint.run/usage/v2/)
