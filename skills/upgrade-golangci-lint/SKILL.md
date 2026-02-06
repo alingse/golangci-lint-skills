@@ -24,7 +24,7 @@ description: 升级 golangci-lint 到最新版本，自动迁移配置（v1→v2
 golangci-lint --version
 
 # 检查配置文件（支持 4 种格式）
-ls .golangci.yml .golangci.yaml .golangci.toml .golangci.json 2>/dev/null && echo "已有配置" || echo "无配置"
+ls .golangci.* 2>/dev/null | grep -q . && echo "已有配置" || echo "无配置"
 
 # 检查配置格式版本（v1 还是 v2）- 仅 YAML 格式有效
 grep "^version:" .golangci.yml .golangci.yaml 2>/dev/null && echo "v2 配置" || echo "v1 配置（需迁移）"

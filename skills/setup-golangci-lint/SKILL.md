@@ -27,7 +27,7 @@ cat go.mod | grep "^go "
 go version
 
 # 检查现有配置（支持 4 种格式）
-ls .golangci.yml .golangci.yaml .golangci.toml .golangci.json 2>/dev/null && echo "已有配置" || echo "无配置"
+ls .golangci.* 2>/dev/null | grep -q . && echo "已有配置" || echo "无配置"
 
 # 检查 CI 配置
 ls .gitlab-ci.yml .github/workflows/*.yml .circleci/config.yml 2>/dev/null
