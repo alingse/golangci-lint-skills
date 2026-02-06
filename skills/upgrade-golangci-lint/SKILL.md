@@ -23,11 +23,11 @@ description: 升级 golangci-lint 到最新版本，自动迁移配置（v1→v2
 # 检查当前版本
 golangci-lint --version
 
-# 检查配置文件
-ls -la .golangci.yml 2>/dev/null && echo "已有配置" || echo "无配置"
+# 检查配置文件（支持 4 种格式）
+ls .golangci.yml .golangci.yaml .golangci.toml .golangci.json 2>/dev/null && echo "已有配置" || echo "无配置"
 
-# 检查配置格式版本（v1 还是 v2）
-grep "^version:" .golangci.yml 2>/dev/null && echo "v2 配置" || echo "v1 配置（需迁移）"
+# 检查配置格式版本（v1 还是 v2）- 仅 YAML 格式有效
+grep "^version:" .golangci.yml .golangci.yaml 2>/dev/null && echo "v2 配置" || echo "v1 配置（需迁移）"
 
 # 检测安装方式
 if command -v brew &> /dev/null && brew list golangci-lint &> /dev/null 2>/dev/null; then
