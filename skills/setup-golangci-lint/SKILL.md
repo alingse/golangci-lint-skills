@@ -1,6 +1,8 @@
 ---
 name: setup-golangci-lint
 description: Quickly set up golangci-lint environment for Go projects. Auto-detect version, create config, integrate CI, generate smart ignore rules, ensure existing code passes safely.
+user-invocable: true
+disable-model-invocation: false
 ---
 
 # golangci-lint Environment Setup
@@ -47,6 +49,8 @@ Select based on Go version in `go.mod`:
 
 ### 3. Install
 
+**Method 1: Using install script (cross-platform, recommended)**
+
 ```bash
 # v2 (recommended)
 curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin latest
@@ -56,6 +60,19 @@ curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/insta
 
 # Verify
 $(go env GOPATH)/bin/golangci-lint --version
+```
+
+**Method 2: Using go install (requires Go 1.20+)**
+
+```bash
+# v2 (recommended for Go >= 1.20)
+go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest
+
+# v1 (for Go < 1.20 or legacy projects)
+# go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+
+# Verify
+golangci-lint --version
 ```
 
 ### 3.5. Configuration Migration (when v1 config exists)
